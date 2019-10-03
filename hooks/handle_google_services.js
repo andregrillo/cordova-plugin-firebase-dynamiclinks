@@ -5,7 +5,7 @@ var utils = require("./utils");
 
 /**
  * Searches the resources folder for a zip file with the name equal
- * to the FCMResourcesFile preference value and resturns an absolute path
+ * to the FCMResourcesFile preference value and returns an absolute path
  * if found.
  *
  * @param {String} resourcesFolder - the absolute path to the expected resources folder
@@ -76,6 +76,49 @@ function getGoogleServiceTargetDir(context) {
 }
 
 /**
+ * Checks if the iOS firebase configuration .plist file exists in the platforms/ios/<project_name>/Resources folder.
+ * If it exists, it will be deleted and then copied again from the google-services.zip provided.
+ * That's done to prevent an installation crash if another firebase plugin was installed previously.
+ * If the .plist file is not found, then it does nothing and goes ahead with the installation.
+ */
+function checkIfIOSConfigurationFilesExist(context) {
+  var iosFolder = path.join(context.opts.projectRoot, 'platforms/ios/');
+  
+  var files = fs.readdirSync(iosFolder);
+    var projFolder;
+    var projName;
+
+    // Find the project folder by looking for *.xcodeproj
+    if (files && files.length) {
+
+      files.forEach(folder => {
+        if (folder.match(/\.xcodeproj$/)) {
+              projFolder = path.join(iosFolder, folder);
+              projName = path.basename(folder, '.xcodeproj');
+
+              //Sets the Project folder variable
+              var filePath = projName + "/Resources/GoogleService-Info.plist";
+
+              //Sets the firebase configuration File path
+              var configFile = path.join(iosFolder, filePath);
+
+              //Searchs for the iOS Firebase Configuration File
+              try {
+              if (fs.existsSync(configFile)) {
+                fs.unlinkSync(configFile)
+              }
+            } catch(err) {
+              console.error(err)
+            }
+        }
+      });
+    }
+    if (!projFolder || !projName) {
+        throw new Error("Could not find an .xcodeproj folder in: " + iosFolder);
+    }
+}
+
+/**
  * Attempts to copy google service files (json/plist) from the source directory
  * (the unziped folder under www) to the required target directory, depending on the platform
  * @param {string} sourceDir source directory containing google services files (json/plist)
@@ -86,11 +129,23 @@ function getGoogleServiceTargetDir(context) {
 function copyGoogleServiceFile(sourceDir, targetDir, platform) {
     switch (platform) {
         case "android":
-            return copyGoogleServiceOnAndroid(sourceDir, targetDir);
+                return copyGoogleServiceOnAndroid(sourceDir, targetDir);
         case "ios":
-            return copyGoogleServiceOnIos(sourceDir, targetDir);
+                return copyGoogleServiceOnIos(sourceDir, targetDir);
         default:
             return false;
+    }
+}
+
+function copyGoogleServiceOnIos(sourceDir, targetDir) {
+
+    try {
+        var sourceFilePath = path.join(sourceDir, "GoogleService-Info.plist");
+        var targetFilePath = path.join(targetDir, "GoogleService-Info.plist");
+        fs.copyFileSync(sourceFilePath, targetFilePath);
+        return true;
+    } catch (error) {
+        return false;
     }
 }
 
@@ -105,25 +160,14 @@ function copyGoogleServiceOnAndroid(sourceDir, targetDir) {
     }
 }
 
-function copyGoogleServiceOnIos(sourceDir, targetDir) {
-    try {
-        var sourceFilePath = path.join(sourceDir, "GoogleService-Info.plist");
-        var targetFilePath = path.join(targetDir, "GoogleService-Info.plist");
-        fs.copyFileSync(sourceFilePath, targetFilePath);
-        return true;
-    } catch (error) {
-        return false;
-    }
-}
-
-
 module.exports = function(context) {
+
     return new Promise(function(resolve, reject) {
         var wwwpath = utils.getWwwPath(context);
-        var configPath = path.join(wwwpath, "google-services-zip");
-
+        var configPath = path.join(wwwpath, "google-services");
         var prefZipFilename = "google-services";
         var zipFile = getZipFile(configPath, prefZipFilename);
+
         // if zip file is present, lets unzip it!
         if (!zipFile) {
             return reject(
@@ -132,6 +176,8 @@ module.exports = function(context) {
         }
         var unzipedResourcesDir = unzip(zipFile, configPath, prefZipFilename);
         var platform = context.opts.plugin.platform;
+
+        if (platform == "ios") { checkIfIOSConfigurationFilesExist(context); }
         var targetDir = getGoogleServiceTargetDir(context);
         var copyWithSuccess = copyGoogleServiceFile(
             unzipedResourcesDir,

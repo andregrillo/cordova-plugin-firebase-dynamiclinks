@@ -70,7 +70,6 @@ function getWwwPath(context) {
     return path.join(platformPath, wwwfolder);
 }
 
-
 module.exports = {
     getPlatformVersion: getPlatformVersion,
     rmNonEmptyDir: rmNonEmptyDir,
