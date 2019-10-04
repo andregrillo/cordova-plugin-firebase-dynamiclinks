@@ -12,6 +12,9 @@ module.exports = function(context) {
 	      	var zipFile = path.join(configPath, "google-services.zip");
 	      	console.log("Cleaning up ", zipFile);
 	      	fs.unlinkSync(zipFile)
+	      	var unzipedDir = path.join(configPath, "google-services");
+	      	console.log("Cleaning up ", unzipedDir);
+	      	utils.rmNonEmptyDir(unzipedDir);
 	      } else {
 	      	console.log("Cleaning up ", configPath);
 	      	utils.rmNonEmptyDir(configPath);
